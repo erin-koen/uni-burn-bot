@@ -121,9 +121,18 @@ async function main(): Promise<void> {
               initiatorStats = db.getInitiatorStats(transfer.initiatorAddress);
             }
 
+            // Get time since last transfer
+            const previousTransferTimestamp = db.getPreviousTransferTimestamp(transfer.hash, transfer.timestamp);
+            const timeSinceLast = previousTransferTimestamp
+              ? transfer.timestamp.getTime() - previousTransferTimestamp.getTime()
+              : null;
+
+            // Get average time between transfers
+            const averageTimeBetween = db.getAverageTimeBetweenTransfers();
+
             // Send Slack alert
             try {
-              await slack.sendTransferAlert(transfer, initiatorStats);
+              await slack.sendTransferAlert(transfer, initiatorStats, timeSinceLast, averageTimeBetween);
               console.log(`Sent alert for transfer: ${transfer.hash}`);
             } catch (error: any) {
               console.error(`Failed to send Slack alert:`, error.message);

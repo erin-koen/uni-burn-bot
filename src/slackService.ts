@@ -30,9 +30,28 @@ export class SlackService {
     return `${wholePart}.${trimmedFractional}`;
   }
 
+  private formatTimeDifference(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) {
+      return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
   private formatTokenTransferMessage(
     transfer: TokenTransfer,
-    initiatorStats?: { count: number; rank: number; totalInitiators: number }
+    initiatorStats?: { count: number; rank: number; totalInitiators: number },
+    timeSinceLast?: number | null,
+    averageTimeBetween?: number | null
   ): any[] {
     const txUrl = `https://etherscan.io/tx/${transfer.hash}`;
     const tokenUrl = `https://etherscan.io/token/${transfer.tokenAddress}`;
@@ -110,6 +129,25 @@ export class SlackService {
       },
     });
 
+    // Add time statistics
+    const timeStats: string[] = [];
+    if (timeSinceLast !== null && timeSinceLast !== undefined) {
+      timeStats.push(`*Time Since Last:* ${this.formatTimeDifference(timeSinceLast)}`);
+    }
+    if (averageTimeBetween !== null && averageTimeBetween !== undefined) {
+      timeStats.push(`*Avg Time Between:* ${this.formatTimeDifference(averageTimeBetween)}`);
+    }
+
+    if (timeStats.length > 0) {
+      blocks.push({
+        type: 'section',
+        fields: timeStats.map(stat => ({
+          type: 'mrkdwn',
+          text: stat,
+        })),
+      });
+    }
+
     // Add Etherscan links
     blocks.push({
       type: 'section',
@@ -151,9 +189,11 @@ export class SlackService {
 
   async sendTransferAlert(
     transfer: TokenTransfer,
-    initiatorStats?: { count: number; rank: number; totalInitiators: number }
+    initiatorStats?: { count: number; rank: number; totalInitiators: number },
+    timeSinceLast?: number | null,
+    averageTimeBetween?: number | null
   ): Promise<void> {
-    const blocks = this.formatTokenTransferMessage(transfer, initiatorStats);
+    const blocks = this.formatTokenTransferMessage(transfer, initiatorStats, timeSinceLast, averageTimeBetween);
     await this.sendMessage(blocks);
   }
 
@@ -204,9 +244,9 @@ export class SlackService {
     await this.sendMessage(headerBlocks);
 
     // Send each transfer as a separate message to avoid Slack's 50 block limit
-    // Each transfer uses about 5-6 blocks, so we can fit ~8-10 per message
+    // Each transfer uses about 7-8 blocks, so we can fit ~6 per message
     const MAX_BLOCKS_PER_MESSAGE = 45; // Leave some buffer
-    const BLOCKS_PER_TRANSFER = 6; // divider + 4 sections + divider (approx)
+    const BLOCKS_PER_TRANSFER = 8; // divider + 6 sections + divider (approx)
     const transfersPerMessage = Math.floor(MAX_BLOCKS_PER_MESSAGE / BLOCKS_PER_TRANSFER);
 
     for (let i = 0; i < sortedTransfers.length; i += transfersPerMessage) {
@@ -285,6 +325,31 @@ export class SlackService {
             text: `*Timestamp:* ${transfer.timestamp.toISOString().replace('T', ' ').slice(0, 19)} UTC`,
           },
         });
+
+        // Add time statistics for historical transfers
+        const previousTransferTimestamp = db.getPreviousTransferTimestamp(transfer.hash, transfer.timestamp);
+        const timeSinceLast = previousTransferTimestamp
+          ? transfer.timestamp.getTime() - previousTransferTimestamp.getTime()
+          : null;
+        const averageTimeBetween = db.getAverageTimeBetweenTransfers();
+
+        const timeStats: string[] = [];
+        if (timeSinceLast !== null && timeSinceLast !== undefined) {
+          timeStats.push(`*Time Since Last:* ${this.formatTimeDifference(timeSinceLast)}`);
+        }
+        if (averageTimeBetween !== null && averageTimeBetween !== undefined) {
+          timeStats.push(`*Avg Time Between:* ${this.formatTimeDifference(averageTimeBetween)}`);
+        }
+
+        if (timeStats.length > 0) {
+          blocks.push({
+            type: 'section',
+            fields: timeStats.map(stat => ({
+              type: 'mrkdwn',
+              text: stat,
+            })),
+          });
+        }
       }
 
       blocks.push({

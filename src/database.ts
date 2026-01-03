@@ -165,6 +165,45 @@ export class TransactionDatabase {
     return result.count;
   }
 
+  getPreviousTransferTimestamp(currentHash: string, currentTimestamp: Date): Date | null {
+    // Get the transfer that came before this one chronologically
+    const stmt = this.db.prepare(`
+      SELECT timestamp
+      FROM token_transfers
+      WHERE tx_hash != ?
+        AND (block_number < (SELECT block_number FROM token_transfers WHERE tx_hash = ?)
+          OR (block_number = (SELECT block_number FROM token_transfers WHERE tx_hash = ?)
+              AND timestamp < ?))
+      ORDER BY block_number DESC, timestamp DESC
+      LIMIT 1
+    `);
+    const result = stmt.get(currentHash, currentHash, currentHash, currentTimestamp.toISOString()) as { timestamp: string } | undefined;
+    return result ? new Date(result.timestamp) : null;
+  }
+
+  getAverageTimeBetweenTransfers(): number | null {
+    // Get all timestamps ordered by block number
+    const stmt = this.db.prepare(`
+      SELECT timestamp
+      FROM token_transfers
+      ORDER BY block_number ASC
+    `);
+    const rows = stmt.all() as { timestamp: string }[];
+
+    if (rows.length < 2) {
+      return null; // Need at least 2 transfers to calculate average
+    }
+
+    let totalDiff = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const prevTime = new Date(rows[i - 1].timestamp).getTime();
+      const currTime = new Date(rows[i].timestamp).getTime();
+      totalDiff += currTime - prevTime;
+    }
+
+    return totalDiff / (rows.length - 1); // Average in milliseconds
+  }
+
   close(): void {
     this.db.close();
   }
