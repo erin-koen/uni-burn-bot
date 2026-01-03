@@ -58,6 +58,30 @@ async function main(): Promise<void> {
   console.log('Bot started. Monitoring for token transfers...');
   console.log(`Polling interval: ${config.pollInterval} seconds`);
 
+  // Check if this is first run (database is empty)
+  const isFirstRun = db.getTransferCount(config.tokenAddress, config.recipientAddress) === 0;
+
+  if (isFirstRun) {
+    console.log('First run detected. Fetching last 24 hours of transfers...');
+    try {
+      const historicalTransfers = await monitor.getHistoricalTransfers(24);
+      console.log(`Found ${historicalTransfers.length} historical transfer(s) in last 24 hours`);
+
+      // Store all historical transfers in database
+      for (const transfer of historicalTransfers) {
+        if (!db.transferExists(transfer.hash)) {
+          db.addTransfer(transfer);
+        }
+      }
+
+      // Send summary to Slack
+      await slack.sendHistoricalSummary(historicalTransfers);
+      console.log('Sent historical summary to Slack');
+    } catch (error: any) {
+      console.error(`Error fetching/sending historical transfers:`, error.message);
+    }
+  }
+
   // Graceful shutdown handler
   const shutdown = () => {
     console.log('\nBot stopped by user');

@@ -126,5 +126,106 @@ export class SlackService {
     const blocks = this.formatTokenTransferMessage(transfer, historicalCount);
     await this.sendMessage(blocks);
   }
+
+  async sendHistoricalSummary(transfers: TokenTransfer[]): Promise<void> {
+    if (transfers.length === 0) {
+      const blocks = [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: '🤖 Bot Started - No Recent Transfers',
+          },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: 'Bot is now monitoring. No matching transfers found in the last 24 hours.',
+          },
+        },
+      ];
+      await this.sendMessage(blocks);
+      return;
+    }
+
+    // Sort by timestamp (newest first)
+    const sortedTransfers = [...transfers].sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+    );
+
+    const blocks: any[] = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `🤖 Bot Started - ${transfers.length} Transfer(s) in Last 24 Hours`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `Found *${transfers.length}* matching transfer(s) from the past 24 hours:`,
+        },
+      },
+    ];
+
+    // Add summary of each transfer (limit to 10 most recent to avoid message being too long)
+    const transfersToShow = sortedTransfers.slice(0, 10);
+
+    for (const transfer of transfersToShow) {
+      const txUrl = `https://etherscan.io/tx/${transfer.hash}`;
+      const timeAgo = this.getTimeAgo(transfer.timestamp);
+
+      blocks.push({
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*<${txUrl}|${transfer.hash.slice(0, 10)}...>*\n${timeAgo}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Amount:* ${transfer.value.toString()}\n*Block:* ${transfer.blockNumber.toLocaleString()}`,
+          },
+        ],
+      });
+    }
+
+    if (transfers.length > 10) {
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `_Showing 10 most recent. ${transfers.length - 10} more transfer(s) found._`,
+          },
+        ],
+      });
+    }
+
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: 'Bot is now monitoring for new transfers...',
+      },
+    });
+
+    await this.sendMessage(blocks);
+  }
+
+  private getTimeAgo(timestamp: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - timestamp.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (diffHours > 0) {
+      return `${diffHours}h ${diffMins}m ago`;
+    }
+    return `${diffMins}m ago`;
+  }
 }
 

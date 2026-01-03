@@ -150,5 +150,18 @@ export class EthereumMonitor {
 
     return newTransfers;
   }
+
+  async getHistoricalTransfers(hoursBack: number = 24): Promise<TokenTransfer[]> {
+    const currentBlock = await this.getLatestBlockNumber();
+
+    // Estimate blocks per hour (Ethereum averages ~12 seconds per block = ~300 blocks/hour)
+    const blocksPerHour = 300;
+    const blocksToScan = hoursBack * blocksPerHour;
+    const startBlock = Math.max(0, currentBlock - blocksToScan);
+
+    console.log(`Fetching historical transfers from last ${hoursBack} hours (blocks ${startBlock} to ${currentBlock})`);
+
+    return await this.scanBlocksForTransfers(startBlock, currentBlock);
+  }
 }
 
