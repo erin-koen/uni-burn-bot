@@ -4,24 +4,42 @@ import { TokenTransfer } from './types';
 export class SlackService {
   private client: WebClient;
   private channel: string;
+  private tokenDecimals: number;
 
-  constructor(botToken: string, channel: string) {
+  constructor(botToken: string, channel: string, tokenDecimals: number = 18) {
     this.client = new WebClient(botToken);
     this.channel = channel;
+    this.tokenDecimals = tokenDecimals;
     console.log(`Slack service initialized for channel: ${this.channel}`);
   }
 
-  private formatTokenTransferMessage(transfer: TokenTransfer, historicalCount: number = 0): any[] {
+  private formatTokenAmount(value: bigint): string {
+    const divisor = BigInt(10 ** this.tokenDecimals);
+    const wholePart = value / divisor;
+    const fractionalPart = value % divisor;
+
+    if (fractionalPart === BigInt(0)) {
+      return wholePart.toString();
+    }
+
+    // Format fractional part with proper decimal places
+    const fractionalStr = fractionalPart.toString().padStart(this.tokenDecimals, '0');
+    const trimmedFractional = fractionalStr.replace(/0+$/, ''); // Remove trailing zeros
+
+    return `${wholePart}.${trimmedFractional}`;
+  }
+
+  private formatTokenTransferMessage(
+    transfer: TokenTransfer,
+    initiatorStats?: { count: number; rank: number; totalInitiators: number }
+  ): any[] {
     const txUrl = `https://etherscan.io/tx/${transfer.hash}`;
     const tokenUrl = `https://etherscan.io/token/${transfer.tokenAddress}`;
+    const initiatorAddress = transfer.initiatorAddress || transfer.from;
+    const initiatorUrl = `https://etherscan.io/address/${initiatorAddress}`;
 
-    // Format value (assuming 18 decimals - user can adjust if needed)
-    const valueRaw = transfer.value;
-    const valueFormatted = valueRaw.toString();
-
-    // Format gas price
-    const gasPriceWei = transfer.gasPrice || BigInt(0);
-    const gasPriceGwei = Number(gasPriceWei) / 1e9;
+    // Format token amount in human-readable format
+    const amountFormatted = this.formatTokenAmount(transfer.value);
 
     // Build message blocks
     const blocks: any[] = [
@@ -37,39 +55,11 @@ export class SlackService {
         fields: [
           {
             type: 'mrkdwn',
-            text: `*Transaction Hash:*\n\`${transfer.hash}\``,
+            text: `*Amount:*\n${amountFormatted} tokens`,
           },
           {
             type: 'mrkdwn',
             text: `*Block Number:*\n${transfer.blockNumber.toLocaleString()}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Token Address:*\n\`${transfer.tokenAddress}\``,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Amount:*\n${valueFormatted}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*From:*\n\`${transfer.from}\``,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*To:*\n\`${transfer.to}\``,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Gas Used:*\n${transfer.gasUsed?.toLocaleString() || 'N/A'}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Gas Price:*\n${gasPriceGwei.toFixed(2)} Gwei`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Status:*\n${transfer.status === 1 ? '✅ Success' : '❌ Failed'}`,
           },
         ],
       },
@@ -77,23 +67,47 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Timestamp:* ${transfer.timestamp.toISOString().replace('T', ' ').slice(0, 19)} UTC`,
+          text: `*Initiator Address:*\n<${initiatorUrl}|\`${initiatorAddress}\`>`,
         },
       },
     ];
 
-    // Add historical context if available
-    if (historicalCount > 0) {
+    // Add initiator stats if available
+    if (initiatorStats) {
+      const rankSuffix = this.getRankSuffix(initiatorStats.rank);
       blocks.push({
-        type: 'context',
-        elements: [
+        type: 'section',
+        fields: [
           {
             type: 'mrkdwn',
-            text: `📊 This is transfer #${historicalCount + 1} matching your criteria`,
+            text: `*Initiator Stats:*\n• Transactions: ${initiatorStats.count}\n• Rank: ${initiatorStats.rank}${rankSuffix} of ${initiatorStats.totalInitiators} total initiators`,
           },
         ],
       });
     }
+
+    // Add transaction details
+    blocks.push({
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Transaction Hash:*\n<${txUrl}|\`${transfer.hash.slice(0, 10)}...\`>`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Status:*\n${transfer.status === 1 ? '✅ Success' : '❌ Failed'}`,
+        },
+      ],
+    });
+
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Timestamp:* ${transfer.timestamp.toISOString().replace('T', ' ').slice(0, 19)} UTC`,
+      },
+    });
 
     // Add Etherscan links
     blocks.push({
@@ -122,8 +136,23 @@ export class SlackService {
     }
   }
 
-  async sendTransferAlert(transfer: TokenTransfer, historicalCount: number = 0): Promise<void> {
-    const blocks = this.formatTokenTransferMessage(transfer, historicalCount);
+  private getRankSuffix(rank: number): string {
+    if (rank % 100 >= 11 && rank % 100 <= 13) {
+      return 'th';
+    }
+    switch (rank % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  }
+
+  async sendTransferAlert(
+    transfer: TokenTransfer,
+    initiatorStats?: { count: number; rank: number; totalInitiators: number }
+  ): Promise<void> {
+    const blocks = this.formatTokenTransferMessage(transfer, initiatorStats);
     await this.sendMessage(blocks);
   }
 
@@ -177,6 +206,7 @@ export class SlackService {
     for (const transfer of transfersToShow) {
       const txUrl = `https://etherscan.io/tx/${transfer.hash}`;
       const timeAgo = this.getTimeAgo(transfer.timestamp);
+      const amountFormatted = this.formatTokenAmount(transfer.value);
 
       blocks.push({
         type: 'section',
@@ -187,7 +217,7 @@ export class SlackService {
           },
           {
             type: 'mrkdwn',
-            text: `*Amount:* ${transfer.value.toString()}\n*Block:* ${transfer.blockNumber.toLocaleString()}`,
+            text: `*Amount:* ${amountFormatted} tokens\n*Block:* ${transfer.blockNumber.toLocaleString()}`,
           },
         ],
       });

@@ -117,6 +117,7 @@ export class EthereumMonitor {
             gasUsed: Number(receipt.gasUsed),
             gasPrice: tx.gasPrice ? BigInt(tx.gasPrice.toString()) : undefined,
             status,
+            initiatorAddress: tx.from, // The address that initiated the transaction
           });
         } catch (error: any) {
           console.error(`Error fetching details for tx ${log.transactionHash}:`, error.message);

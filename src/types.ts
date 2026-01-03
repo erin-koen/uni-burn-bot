@@ -9,6 +9,7 @@ export interface TokenTransfer {
   gasUsed?: number;
   gasPrice?: bigint;
   status?: number;
+  initiatorAddress?: string; // The address that initiated the transaction (tx.from)
 }
 
 export interface Config {
@@ -16,6 +17,7 @@ export interface Config {
   tokenAddress: string;
   recipientAddress: string;
   amount: string; // Amount in token's smallest unit (e.g., wei for 18 decimals)
+  tokenDecimals?: number; // Token decimals (default: 18)
   slackBotToken: string;
   slackChannel: string;
   pollInterval: number;

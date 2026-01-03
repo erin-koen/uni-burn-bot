@@ -1,19 +1,22 @@
 import * as dotenv from 'dotenv';
+import * as path from 'path';
 import { TransactionDatabase } from './database';
 import { EthereumMonitor } from './ethereumMonitor';
 import { SlackService } from './slackService';
 import { Config } from './types';
 
-dotenv.config();
+// Load .env file from project root (works with both ts-node and compiled JS)
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 function loadConfig(): Config {
-  const ethereumRpcUrl = process.env.ETHEREUM_RPC_URL;
-  const tokenAddress = process.env.TOKEN_ADDRESS;
-  const recipientAddress = process.env.RECIPIENT_ADDRESS;
-  const amount = process.env.AMOUNT;
-  const slackBotToken = process.env.SLACK_BOT_TOKEN;
-  const slackChannel = process.env.SLACK_CHANNEL;
-  const pollInterval = parseInt(process.env.POLL_INTERVAL || '30', 10);
+  const ethereumRpcUrl = process.env.ETHEREUM_RPC_URL?.trim();
+  const tokenAddress = process.env.TOKEN_ADDRESS?.trim();
+  const recipientAddress = process.env.RECIPIENT_ADDRESS?.trim();
+  const amount = process.env.AMOUNT?.trim();
+  const tokenDecimals = process.env.TOKEN_DECIMALS ? parseInt(process.env.TOKEN_DECIMALS.trim(), 10) : 18;
+  const slackBotToken = process.env.SLACK_BOT_TOKEN?.trim();
+  const slackChannel = process.env.SLACK_CHANNEL?.trim();
+  const pollInterval = parseInt(process.env.POLL_INTERVAL?.trim() || '30', 10);
 
   if (!ethereumRpcUrl || !tokenAddress || !recipientAddress || !amount || !slackBotToken || !slackChannel) {
     console.error('Missing required environment variables. Please check your .env file.');
@@ -26,6 +29,7 @@ function loadConfig(): Config {
     tokenAddress,
     recipientAddress,
     amount,
+    tokenDecimals,
     slackBotToken,
     slackChannel,
     pollInterval,
@@ -49,7 +53,7 @@ async function main(): Promise<void> {
       config.amount
     );
     await monitor.initialize();
-    slack = new SlackService(config.slackBotToken, config.slackChannel);
+    slack = new SlackService(config.slackBotToken, config.slackChannel, config.tokenDecimals);
   } catch (error: any) {
     console.error(`Failed to initialize services:`, error.message);
     process.exit(1);
@@ -104,16 +108,19 @@ async function main(): Promise<void> {
         for (const transfer of newTransfers) {
           // Check if we've already seen this transfer
           if (!db.transferExists(transfer.hash)) {
-            // Get historical count for context
-            const historicalCount = db.getTransferCount(config.tokenAddress, config.recipientAddress);
-
-            // Store transfer in database
+            // Store transfer in database first
             db.addTransfer(transfer);
             console.log(`Stored transfer: ${transfer.hash}`);
 
+            // Get initiator stats if we have an initiator address
+            let initiatorStats: { count: number; rank: number; totalInitiators: number } | undefined;
+            if (transfer.initiatorAddress) {
+              initiatorStats = db.getInitiatorStats(transfer.initiatorAddress);
+            }
+
             // Send Slack alert
             try {
-              await slack.sendTransferAlert(transfer, historicalCount);
+              await slack.sendTransferAlert(transfer, initiatorStats);
               console.log(`Sent alert for transfer: ${transfer.hash}`);
             } catch (error: any) {
               console.error(`Failed to send Slack alert:`, error.message);
