@@ -34,9 +34,12 @@ RECIPIENT_ADDRESS=0x...
 # Amount to monitor (in token's smallest unit, e.g., for 18 decimals: 1000000000000000000 = 1 token)
 AMOUNT=1000000000000000000
 
+# Optional: Token decimals for human-readable formatting (default: 18)
+# TOKEN_DECIMALS=18
+
 # Slack configuration
 SLACK_BOT_TOKEN=xoxb-your-bot-token
-SLACK_CHANNEL=#your-channel
+SLACK_CHANNEL="#your-channel"
 
 # Optional: Polling interval in seconds (default: 30)
 # POLL_INTERVAL=30
@@ -63,8 +66,9 @@ npm run dev
 - `TOKEN_ADDRESS`: The ERC-20 token contract address to monitor
 - `RECIPIENT_ADDRESS`: The address that receives the tokens (the `to` address in the Transfer event)
 - `AMOUNT`: The exact amount to monitor (in the token's smallest unit, e.g., wei for 18 decimals)
+- `TOKEN_DECIMALS`: (Optional) Token decimals for human-readable formatting (default: 18)
 - `SLACK_BOT_TOKEN`: Your Slack bot token (starts with `xoxb-`)
-- `SLACK_CHANNEL`: The Slack channel to send alerts to (e.g., `#alerts`)
+- `SLACK_CHANNEL`: The Slack channel to send alerts to (e.g., `#alerts`). **Note:** If the channel name starts with `#`, you must quote the value: `"#channel-name"`
 - `POLL_INTERVAL`: (Optional) How often to check for new transfers in seconds (default: 30)
 
 ### Amount Calculation

@@ -5,7 +5,7 @@
 1. Go to https://api.slack.com/apps
 2. Click "Create New App"
 3. Choose **"From scratch"**
-4. Enter app name (e.g., "Ethereum Monitor Bot")
+4. Enter app name (e.g., "UNI Burn Bot")
 5. Select your workspace
 6. Click "Create App"
 
