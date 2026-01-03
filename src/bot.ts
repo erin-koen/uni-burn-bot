@@ -66,10 +66,13 @@ async function main(): Promise<void> {
   const isFirstRun = db.getTransferCount(config.tokenAddress, config.recipientAddress) === 0;
 
   if (isFirstRun) {
-    console.log('First run detected. Fetching last 24 hours of transfers...');
+    // Start date: December 27, 2025 at noon EST (17:00 UTC)
+    const startDate = new Date('2025-12-27T17:00:00Z');
+    console.log(`First run detected. Fetching transfers from ${startDate.toISOString()}...`);
+
     try {
-      const historicalTransfers = await monitor.getHistoricalTransfers(24);
-      console.log(`Found ${historicalTransfers.length} historical transfer(s) in last 24 hours`);
+      const historicalTransfers = await monitor.getHistoricalTransfers(startDate);
+      console.log(`Found ${historicalTransfers.length} historical transfer(s) since ${startDate.toISOString()}`);
 
       // Store all historical transfers in database
       for (const transfer of historicalTransfers) {
@@ -78,8 +81,8 @@ async function main(): Promise<void> {
         }
       }
 
-      // Send summary to Slack
-      await slack.sendHistoricalSummary(historicalTransfers);
+      // Send summary to Slack with initiator stats
+      await slack.sendHistoricalSummary(historicalTransfers, db);
       console.log('Sent historical summary to Slack');
     } catch (error: any) {
       console.error(`Error fetching/sending historical transfers:`, error.message);

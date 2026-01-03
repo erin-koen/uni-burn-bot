@@ -152,15 +152,56 @@ export class EthereumMonitor {
     return newTransfers;
   }
 
-  async getHistoricalTransfers(hoursBack: number = 24): Promise<TokenTransfer[]> {
+  async getBlockNumberForDate(targetDate: Date): Promise<number> {
+    // Convert target date to Unix timestamp
+    const targetTimestamp = Math.floor(targetDate.getTime() / 1000);
     const currentBlock = await this.getLatestBlockNumber();
 
-    // Estimate blocks per hour (Ethereum averages ~12 seconds per block = ~300 blocks/hour)
-    const blocksPerHour = 300;
-    const blocksToScan = hoursBack * blocksPerHour;
-    const startBlock = Math.max(0, currentBlock - blocksToScan);
+    // Get current block to estimate
+    const currentBlockData = await this.web3.eth.getBlock(currentBlock);
+    const currentTimestamp = Number(currentBlockData.timestamp);
 
-    console.log(`Fetching historical transfers from last ${hoursBack} hours (blocks ${startBlock} to ${currentBlock})`);
+    // Estimate block number (Ethereum averages ~12 seconds per block)
+    const secondsPerBlock = 12;
+    const secondsDiff = currentTimestamp - targetTimestamp;
+    const estimatedBlocksBack = Math.floor(secondsDiff / secondsPerBlock);
+    let estimatedBlock = Math.max(0, currentBlock - estimatedBlocksBack);
+
+    // Binary search to find the exact block
+    let low = Math.max(0, estimatedBlock - 1000);
+    let high = Math.min(currentBlock, estimatedBlock + 1000);
+    let bestBlock = estimatedBlock;
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      try {
+        const block = await this.web3.eth.getBlock(mid);
+        const blockTimestamp = Number(block.timestamp);
+
+        if (blockTimestamp >= targetTimestamp) {
+          bestBlock = mid;
+          high = mid - 1;
+        } else {
+          low = mid + 1;
+        }
+      } catch (error) {
+        // If block doesn't exist, adjust search
+        if (mid < estimatedBlock) {
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+    }
+
+    return bestBlock;
+  }
+
+  async getHistoricalTransfers(startDate: Date): Promise<TokenTransfer[]> {
+    const currentBlock = await this.getLatestBlockNumber();
+    const startBlock = await this.getBlockNumberForDate(startDate);
+
+    console.log(`Fetching historical transfers from ${startDate.toISOString()} (blocks ${startBlock} to ${currentBlock})`);
 
     return await this.scanBlocksForTransfers(startBlock, currentBlock);
   }
