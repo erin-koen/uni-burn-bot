@@ -204,6 +204,47 @@ export class TransactionDatabase {
     return totalDiff / (rows.length - 1); // Average in milliseconds
   }
 
+  getTotalTokensSent(): bigint {
+    // SQLite doesn't handle very large integers well, so we need to sum them in JavaScript
+    const stmt = this.db.prepare(`
+      SELECT value
+      FROM token_transfers
+    `);
+    const rows = stmt.all() as Array<{ value: string }>;
+
+    let total = BigInt(0);
+    for (const row of rows) {
+      total += BigInt(row.value);
+    }
+
+    return total;
+  }
+
+  getTopInitiators(limit: number = 3): Array<{ address: string; count: number }> {
+    const stmt = this.db.prepare(`
+      SELECT
+        initiator_address as address,
+        COUNT(*) as count
+      FROM token_transfers
+      WHERE initiator_address IS NOT NULL
+      GROUP BY initiator_address
+      ORDER BY count DESC
+      LIMIT ?
+    `);
+    const rows = stmt.all(limit) as Array<{ address: string; count: number }>;
+    return rows;
+  }
+
+  getTotalInitiators(): number {
+    const stmt = this.db.prepare(`
+      SELECT COUNT(DISTINCT initiator_address) as total
+      FROM token_transfers
+      WHERE initiator_address IS NOT NULL
+    `);
+    const result = stmt.get() as { total: number };
+    return result.total;
+  }
+
   close(): void {
     this.db.close();
   }

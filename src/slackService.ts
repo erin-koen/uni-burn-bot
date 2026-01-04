@@ -49,17 +49,18 @@ export class SlackService {
 
   private formatTokenTransferMessage(
     transfer: TokenTransfer,
-    initiatorStats?: { count: number; rank: number; totalInitiators: number },
-    timeSinceLast?: number | null,
-    averageTimeBetween?: number | null
+    timeSinceLast: number | null,
+    aggregateStats: {
+      totalTokens: bigint;
+      totalTransactions: number;
+      averageTimeBetween: number | null;
+      totalInitiators: number;
+      topInitiators: Array<{ address: string; count: number }>;
+    }
   ): any[] {
     const txUrl = `https://etherscan.io/tx/${transfer.hash}`;
-    const tokenUrl = `https://etherscan.io/token/${transfer.tokenAddress}`;
     const initiatorAddress = transfer.initiatorAddress || transfer.from;
     const initiatorUrl = `https://etherscan.io/address/${initiatorAddress}`;
-
-    // Format token amount in human-readable format
-    const amountFormatted = this.formatTokenAmount(transfer.value);
 
     // Build message blocks
     const blocks: any[] = [
@@ -71,91 +72,99 @@ export class SlackService {
         },
       },
       {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Amount:*\n${amountFormatted} tokens`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Block Number:*\n${transfer.blockNumber.toLocaleString()}`,
-          },
-        ],
+        type: 'divider',
       },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Initiator Address:*\n<${initiatorUrl}|\`${initiatorAddress}\`>`,
+          text: '*📋 Most Recent Transaction*',
         },
       },
-    ];
-
-    // Add initiator stats if available
-    if (initiatorStats) {
-      const rankSuffix = this.getRankSuffix(initiatorStats.rank);
-      blocks.push({
+      {
         type: 'section',
         fields: [
           {
             type: 'mrkdwn',
-            text: `*Initiator Stats:*\n• Transactions: ${initiatorStats.count}\n• Rank: ${initiatorStats.rank}${rankSuffix} of ${initiatorStats.totalInitiators} total initiators`,
+            text: `*Initiator:*\n<${initiatorUrl}|\`${initiatorAddress}\`>`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Transaction Hash:*\n<${txUrl}|\`${transfer.hash.slice(0, 10)}...\`>`,
           },
         ],
+      },
+    ];
+
+    // Add time since last if available
+    if (timeSinceLast !== null && timeSinceLast !== undefined) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Time Since Last Transaction:* ${this.formatTimeDifference(timeSinceLast)}`,
+        },
       });
     }
 
-    // Add transaction details
+    // Add aggregate statistics
+    blocks.push({
+      type: 'divider',
+    });
+
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*📊 Aggregate Statistics*',
+      },
+    });
+
+    const totalTokensFormatted = this.formatTokenAmount(aggregateStats.totalTokens);
+    const avgTimeFormatted = aggregateStats.averageTimeBetween
+      ? this.formatTimeDifference(aggregateStats.averageTimeBetween)
+      : 'N/A';
+
     blocks.push({
       type: 'section',
       fields: [
         {
           type: 'mrkdwn',
-          text: `*Transaction Hash:*\n<${txUrl}|\`${transfer.hash.slice(0, 10)}...\`>`,
+          text: `*Total Tokens Sent:*\n${totalTokensFormatted} tokens`,
         },
         {
           type: 'mrkdwn',
-          text: `*Status:*\n${transfer.status === 1 ? '✅ Success' : '❌ Failed'}`,
+          text: `*Total Transactions:*\n${aggregateStats.totalTransactions.toLocaleString()}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Average Time Between:*\n${avgTimeFormatted}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Total Initiators:*\n${aggregateStats.totalInitiators.toLocaleString()}`,
         },
       ],
     });
 
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*Timestamp:* ${transfer.timestamp.toISOString().replace('T', ' ').slice(0, 19)} UTC`,
-      },
-    });
+    // Add top 3 initiators
+    if (aggregateStats.topInitiators.length > 0) {
+      const topInitiatorsText = aggregateStats.topInitiators
+        .map((initiator, index) => {
+          const rankEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉';
+          const initiatorUrl = `https://etherscan.io/address/${initiator.address}`;
+          return `${rankEmoji} <${initiatorUrl}|\`${initiator.address.slice(0, 10)}...\`> - ${initiator.count} transaction${initiator.count !== 1 ? 's' : ''}`;
+        })
+        .join('\n');
 
-    // Add time statistics
-    const timeStats: string[] = [];
-    if (timeSinceLast !== null && timeSinceLast !== undefined) {
-      timeStats.push(`*Time Since Last:* ${this.formatTimeDifference(timeSinceLast)}`);
-    }
-    if (averageTimeBetween !== null && averageTimeBetween !== undefined) {
-      timeStats.push(`*Avg Time Between:* ${this.formatTimeDifference(averageTimeBetween)}`);
-    }
-
-    if (timeStats.length > 0) {
       blocks.push({
         type: 'section',
-        fields: timeStats.map(stat => ({
+        text: {
           type: 'mrkdwn',
-          text: stat,
-        })),
+          text: `*Top 3 Initiators:*\n${topInitiatorsText}`,
+        },
       });
     }
-
-    // Add Etherscan links
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `<${txUrl}|View Transaction on Etherscan> | <${tokenUrl}|View Token on Etherscan>`,
-      },
-    });
 
     return blocks;
   }
@@ -189,199 +198,18 @@ export class SlackService {
 
   async sendTransferAlert(
     transfer: TokenTransfer,
-    initiatorStats?: { count: number; rank: number; totalInitiators: number },
-    timeSinceLast?: number | null,
-    averageTimeBetween?: number | null
+    timeSinceLast: number | null,
+    aggregateStats: {
+      totalTokens: bigint;
+      totalTransactions: number;
+      averageTimeBetween: number | null;
+      totalInitiators: number;
+      topInitiators: Array<{ address: string; count: number }>;
+    }
   ): Promise<void> {
-    const blocks = this.formatTokenTransferMessage(transfer, initiatorStats, timeSinceLast, averageTimeBetween);
+    const blocks = this.formatTokenTransferMessage(transfer, timeSinceLast, aggregateStats);
     await this.sendMessage(blocks);
   }
 
-  async sendHistoricalSummary(transfers: TokenTransfer[], db: TransactionDatabase): Promise<void> {
-    if (transfers.length === 0) {
-      const blocks = [
-        {
-          type: 'header',
-          text: {
-            type: 'plain_text',
-            text: '🤖 Bot Started - No Historical Transfers',
-          },
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: 'Bot is now monitoring. No matching transfers found since December 27, 2025.',
-          },
-        },
-      ];
-      await this.sendMessage(blocks);
-      return;
-    }
-
-    // Sort by timestamp (newest first)
-    const sortedTransfers = [...transfers].sort(
-      (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
-    );
-
-    // Send header message
-    const headerBlocks: any[] = [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `🤖 Bot Started - ${transfers.length} Historical Transfer(s) Found`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `Found *${transfers.length}* matching transfer(s) since December 27, 2025:`,
-        },
-      },
-    ];
-    await this.sendMessage(headerBlocks);
-
-    // Send each transfer as a separate message to avoid Slack's 50 block limit
-    // Each transfer uses about 7-8 blocks, so we can fit ~6 per message
-    const MAX_BLOCKS_PER_MESSAGE = 45; // Leave some buffer
-    const BLOCKS_PER_TRANSFER = 8; // divider + 6 sections + divider (approx)
-    const transfersPerMessage = Math.floor(MAX_BLOCKS_PER_MESSAGE / BLOCKS_PER_TRANSFER);
-
-    for (let i = 0; i < sortedTransfers.length; i += transfersPerMessage) {
-      const batch = sortedTransfers.slice(i, i + transfersPerMessage);
-      const blocks: any[] = [];
-
-      for (const transfer of batch) {
-        const txUrl = `https://etherscan.io/tx/${transfer.hash}`;
-        const initiatorAddress = transfer.initiatorAddress || transfer.from;
-        const initiatorUrl = `https://etherscan.io/address/${initiatorAddress}`;
-        const amountFormatted = this.formatTokenAmount(transfer.value);
-
-        // Get initiator stats
-        let initiatorStats: { count: number; rank: number; totalInitiators: number } | undefined;
-        if (transfer.initiatorAddress) {
-          initiatorStats = db.getInitiatorStats(transfer.initiatorAddress);
-        }
-
-        blocks.push({
-          type: 'divider',
-        });
-
-        blocks.push({
-          type: 'section',
-          fields: [
-            {
-              type: 'mrkdwn',
-              text: `*Amount:*\n${amountFormatted} tokens`,
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Block Number:*\n${transfer.blockNumber.toLocaleString()}`,
-            },
-          ],
-        });
-
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*Initiator Address:*\n<${initiatorUrl}|\`${initiatorAddress}\`>`,
-          },
-        });
-
-        if (initiatorStats) {
-          const rankSuffix = this.getRankSuffix(initiatorStats.rank);
-          blocks.push({
-            type: 'section',
-            fields: [
-              {
-                type: 'mrkdwn',
-                text: `*Initiator Stats:*\n• Transactions: ${initiatorStats.count}\n• Rank: ${initiatorStats.rank}${rankSuffix} of ${initiatorStats.totalInitiators} total initiators`,
-              },
-            ],
-          });
-        }
-
-        blocks.push({
-          type: 'section',
-          fields: [
-            {
-              type: 'mrkdwn',
-              text: `*Transaction Hash:*\n<${txUrl}|\`${transfer.hash.slice(0, 10)}...\`>`,
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Status:*\n${transfer.status === 1 ? '✅ Success' : '❌ Failed'}`,
-            },
-          ],
-        });
-
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*Timestamp:* ${transfer.timestamp.toISOString().replace('T', ' ').slice(0, 19)} UTC`,
-          },
-        });
-
-        // Add time statistics for historical transfers
-        const previousTransferTimestamp = db.getPreviousTransferTimestamp(transfer.hash, transfer.timestamp);
-        const timeSinceLast = previousTransferTimestamp
-          ? transfer.timestamp.getTime() - previousTransferTimestamp.getTime()
-          : null;
-        const averageTimeBetween = db.getAverageTimeBetweenTransfers();
-
-        const timeStats: string[] = [];
-        if (timeSinceLast !== null && timeSinceLast !== undefined) {
-          timeStats.push(`*Time Since Last:* ${this.formatTimeDifference(timeSinceLast)}`);
-        }
-        if (averageTimeBetween !== null && averageTimeBetween !== undefined) {
-          timeStats.push(`*Avg Time Between:* ${this.formatTimeDifference(averageTimeBetween)}`);
-        }
-
-        if (timeStats.length > 0) {
-          blocks.push({
-            type: 'section',
-            fields: timeStats.map(stat => ({
-              type: 'mrkdwn',
-              text: stat,
-            })),
-          });
-        }
-      }
-
-      blocks.push({
-        type: 'divider',
-      });
-
-      await this.sendMessage(blocks);
-    }
-
-    // Send final message
-    const finalBlocks = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '✅ Historical summary complete. Bot is now monitoring for new transfers...',
-        },
-      },
-    ];
-    await this.sendMessage(finalBlocks);
-  }
-
-  private getTimeAgo(timestamp: Date): string {
-    const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (diffHours > 0) {
-      return `${diffHours}h ${diffMins}m ago`;
-    }
-    return `${diffMins}m ago`;
-  }
 }
 

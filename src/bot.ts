@@ -81,9 +81,58 @@ async function main(): Promise<void> {
         }
       }
 
-      // Send summary to Slack with initiator stats
-      await slack.sendHistoricalSummary(historicalTransfers, db);
-      console.log('Sent historical summary to Slack');
+      // If we found transfers, send a message with the most recent one and aggregate stats
+      if (historicalTransfers.length > 0) {
+        // Sort by timestamp to get the most recent
+        const sortedTransfers = [...historicalTransfers].sort(
+          (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+        );
+        const mostRecentTransfer = sortedTransfers[0];
+
+        // Get time since last transfer (second most recent)
+        const timeSinceLast = sortedTransfers.length > 1
+          ? mostRecentTransfer.timestamp.getTime() - sortedTransfers[1].timestamp.getTime()
+          : null;
+
+        // Get aggregate statistics
+        const totalTokens = db.getTotalTokensSent();
+        const totalTransactions = db.getTransferCount(config.tokenAddress, config.recipientAddress);
+        const averageTimeBetween = db.getAverageTimeBetweenTransfers();
+        const totalInitiators = db.getTotalInitiators();
+        const topInitiators = db.getTopInitiators(3);
+
+        const aggregateStats = {
+          totalTokens,
+          totalTransactions,
+          averageTimeBetween,
+          totalInitiators,
+          topInitiators,
+        };
+
+        // Send message with new format
+        await slack.sendTransferAlert(mostRecentTransfer, timeSinceLast, aggregateStats);
+        console.log('Sent historical summary to Slack');
+      } else {
+        // No transfers found
+        const blocks = [
+          {
+            type: 'header',
+            text: {
+              type: 'plain_text',
+              text: '🤖 Bot Started - No Historical Transfers',
+            },
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: 'Bot is now monitoring. No matching transfers found since December 27, 2025.',
+            },
+          },
+        ];
+        await slack.sendMessage(blocks);
+        console.log('Sent empty historical summary to Slack');
+      }
     } catch (error: any) {
       console.error(`Error fetching/sending historical transfers:`, error.message);
     }
@@ -115,24 +164,30 @@ async function main(): Promise<void> {
             db.addTransfer(transfer);
             console.log(`Stored transfer: ${transfer.hash}`);
 
-            // Get initiator stats if we have an initiator address
-            let initiatorStats: { count: number; rank: number; totalInitiators: number } | undefined;
-            if (transfer.initiatorAddress) {
-              initiatorStats = db.getInitiatorStats(transfer.initiatorAddress);
-            }
-
             // Get time since last transfer
             const previousTransferTimestamp = db.getPreviousTransferTimestamp(transfer.hash, transfer.timestamp);
             const timeSinceLast = previousTransferTimestamp
               ? transfer.timestamp.getTime() - previousTransferTimestamp.getTime()
               : null;
 
-            // Get average time between transfers
+            // Get aggregate statistics
+            const totalTokens = db.getTotalTokensSent();
+            const totalTransactions = db.getTransferCount(config.tokenAddress, config.recipientAddress);
             const averageTimeBetween = db.getAverageTimeBetweenTransfers();
+            const totalInitiators = db.getTotalInitiators();
+            const topInitiators = db.getTopInitiators(3);
+
+            const aggregateStats = {
+              totalTokens,
+              totalTransactions,
+              averageTimeBetween,
+              totalInitiators,
+              topInitiators,
+            };
 
             // Send Slack alert
             try {
-              await slack.sendTransferAlert(transfer, initiatorStats, timeSinceLast, averageTimeBetween);
+              await slack.sendTransferAlert(transfer, timeSinceLast, aggregateStats);
               console.log(`Sent alert for transfer: ${transfer.hash}`);
             } catch (error: any) {
               console.error(`Failed to send Slack alert:`, error.message);
