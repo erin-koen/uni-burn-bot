@@ -1,6 +1,5 @@
 import { SlackService } from '../src/slackService';
 import { TokenTransfer } from '../src/types';
-import { WebClient } from '@slack/web-api';
 
 // Mock the Slack WebClient
 const mockPostMessage = jest.fn().mockResolvedValue({ ts: '1234567890.123456' });

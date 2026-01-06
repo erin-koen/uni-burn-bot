@@ -1,5 +1,4 @@
 import { EthereumMonitor } from '../src/ethereumMonitor';
-import { Web3 } from 'web3';
 
 // Mock web3
 jest.mock('web3', () => {

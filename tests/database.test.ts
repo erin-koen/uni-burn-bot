@@ -1,7 +1,6 @@
 import { TransactionDatabase } from '../src/database';
 import { TokenTransfer } from '../src/types';
 import * as fs from 'fs';
-import * as path from 'path';
 
 describe('TransactionDatabase', () => {
   let db: TransactionDatabase;

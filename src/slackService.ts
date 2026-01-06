@@ -1,6 +1,5 @@
 import { WebClient } from '@slack/web-api';
 import { TokenTransfer } from './types';
-import { TransactionDatabase } from './database';
 
 export class SlackService {
   private client: WebClient;
@@ -68,7 +67,7 @@ export class SlackService {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: '🔔 Token Transfer Detected',
+          text: ' :unicorn_face: :fire: UNI  Burn Detected',
         },
       },
       {
