@@ -105,6 +105,7 @@ async function main(): Promise<void> {
         const averageTimeBetween = db.getAverageTimeBetweenTransfers();
         const totalBurners = db.getTotalBurners();
         const topBurners = db.getTopBurners(3);
+        const daily7DayMA = db.getDaily7DayMovingAverage(30);
 
         const aggregateStats = {
           totalTokens,
@@ -112,6 +113,7 @@ async function main(): Promise<void> {
           averageTimeBetween,
           totalBurners,
           topBurners,
+          daily7DayMA,
         };
 
         // Send message with new format
@@ -186,6 +188,7 @@ async function main(): Promise<void> {
             const averageTimeBetween = db.getAverageTimeBetweenTransfers();
             const totalBurners = db.getTotalBurners();
             const topBurners = db.getTopBurners(3);
+            const daily7DayMA = db.getDaily7DayMovingAverage(30);
 
             const aggregateStats = {
               totalTokens,
@@ -193,6 +196,7 @@ async function main(): Promise<void> {
               averageTimeBetween,
               totalBurners,
               topBurners,
+              daily7DayMA,
             };
 
             // Send Slack alert

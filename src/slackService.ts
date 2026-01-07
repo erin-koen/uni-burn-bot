@@ -46,6 +46,127 @@ export class SlackService {
     }
   }
 
+  private generateChart(dailyData: Array<{ date: Date; movingAverageHours: number | null }>): string {
+    const chartWidth = 70;
+    const chartHeight = 15;
+    const yAxisWidth = 8;
+    const dataWidth = chartWidth - yAxisWidth;
+
+    if (dailyData.length === 0) {
+      return '```\nNo data available for chart\n```';
+    }
+
+    // Filter out null values but keep track of original indices
+    const validDataWithIndices = dailyData
+      .map((d, idx) => ({ ...d, originalIndex: idx }))
+      .filter(d => d.movingAverageHours !== null) as Array<{
+        date: Date;
+        movingAverageHours: number;
+        originalIndex: number
+      }>;
+
+    if (validDataWithIndices.length === 0) {
+      return '```\nNo data available for chart\n```';
+    }
+
+    // Find min and max values
+    const values = validDataWithIndices.map(d => d.movingAverageHours);
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const range = maxValue - minValue || 1; // Avoid division by zero
+
+    // Normalize values to chart height
+    const normalized = validDataWithIndices.map(d => ({
+      date: d.date,
+      value: Math.round(((d.movingAverageHours - minValue) / range) * (chartHeight - 1)),
+      original: d.movingAverageHours,
+      originalIndex: d.originalIndex
+    }));
+
+    // Create chart grid
+    const chart: string[][] = Array(chartHeight).fill(null).map(() => Array(chartWidth).fill(' '));
+
+    // Draw Y-axis labels and values (right-aligned)
+    for (let y = 0; y < chartHeight; y++) {
+      const value = maxValue - (range * y / (chartHeight - 1));
+      const label = value.toFixed(1) + 'h';
+      const labelStart = yAxisWidth - label.length - 1;
+
+      // Add value label
+      for (let i = 0; i < label.length; i++) {
+        if (labelStart + i >= 0) {
+          chart[y][labelStart + i] = label[i];
+        }
+      }
+      // Add Y-axis line
+      chart[y][yAxisWidth - 1] = '│';
+    }
+
+    // Draw data points as a line chart
+    // Map each point to X position based on its position in the data array
+    // The data array starts from the first transaction day, so indices are 0 to dataLength-1
+    const dataLength = dailyData.length;
+    if (normalized.length > 1) {
+      for (let i = 0; i < normalized.length - 1; i++) {
+        const point1 = normalized[i];
+        const point2 = normalized[i + 1];
+
+        // Calculate X position based on original index in dailyData array
+        // Use dataLength - 1 to avoid division by zero and get proper spacing
+        const x1 = yAxisWidth + Math.floor((point1.originalIndex / Math.max(1, dataLength - 1)) * dataWidth);
+        const y1 = chartHeight - 1 - point1.value;
+        const x2 = yAxisWidth + Math.floor((point2.originalIndex / Math.max(1, dataLength - 1)) * dataWidth);
+        const y2 = chartHeight - 1 - point2.value;
+
+        // Draw line between points
+        const steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
+        for (let step = 0; step <= steps; step++) {
+          const t = steps > 0 ? step / steps : 0;
+          const x = Math.round(x1 + (x2 - x1) * t);
+          const y = Math.round(y1 + (y2 - y1) * t);
+
+          if (x >= yAxisWidth && x < chartWidth && y >= 0 && y < chartHeight) {
+            chart[y][x] = '█';
+          }
+        }
+      }
+    } else if (normalized.length === 1) {
+      // Single point
+      const point = normalized[0];
+      const x = yAxisWidth + Math.floor((point.originalIndex / Math.max(1, dataLength - 1)) * dataWidth);
+      const y = chartHeight - 1 - point.value;
+      if (x >= yAxisWidth && x < chartWidth && y >= 0 && y < chartHeight) {
+        chart[y][x] = '█';
+      }
+    }
+
+    // Draw X-axis
+    const xAxisY = chartHeight - 1;
+    for (let x = yAxisWidth; x < chartWidth; x++) {
+      chart[xAxisY][x] = '─';
+    }
+    chart[xAxisY][yAxisWidth - 1] = '└';
+
+    // Add date labels at start, middle, and end
+    const dateLabels = [
+      dailyData[0]?.date || new Date(),
+      dailyData[Math.floor(dailyData.length / 2)]?.date || new Date(),
+      dailyData[dailyData.length - 1]?.date || new Date()
+    ].map(d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+
+    // Convert chart to string
+    const chartLines = chart.map(row => row.join(''));
+
+    // Add date labels on a separate line
+    const dateLabelSpacing = Math.floor(dataWidth / 2);
+    const dateLabelLine = ' '.repeat(yAxisWidth) +
+      dateLabels[0].padEnd(dateLabelSpacing) +
+      dateLabels[1].padEnd(dateLabelSpacing) +
+      dateLabels[2];
+
+    return '```\n' + chartLines.join('\n') + '\n' + dateLabelLine + '\n```';
+  }
+
   private formatTokenTransferMessage(
     transfer: TokenTransfer,
     timeSinceLast: number | null,
@@ -56,6 +177,7 @@ export class SlackService {
       averageTimeBetween: number | null;
       totalBurners: number;
       topBurners: Array<{ address: string; count: number }>;
+      daily7DayMA: Array<{ date: Date; movingAverageHours: number | null }>;
     }
   ): any[] {
     const txUrl = `https://etherscan.io/tx/${transfer.hash}`;
@@ -166,6 +288,28 @@ export class SlackService {
       });
     }
 
+    // Add 7-day moving average chart
+    blocks.push({
+      type: 'divider',
+    });
+
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*📈 7-Day Moving Average of Time Between Transactions (Last 30 Days)*',
+      },
+    });
+
+    const chart = this.generateChart(aggregateStats.daily7DayMA);
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: chart,
+      },
+    });
+
     return blocks;
   }
 
@@ -206,6 +350,7 @@ export class SlackService {
       averageTimeBetween: number | null;
       totalBurners: number;
       topBurners: Array<{ address: string; count: number }>;
+      daily7DayMA: Array<{ date: Date; movingAverageHours: number | null }>;
     }
   ): Promise<void> {
     const blocks = this.formatTokenTransferMessage(transfer, timeSinceLast, burnerCount, aggregateStats);

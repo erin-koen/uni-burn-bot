@@ -364,6 +364,116 @@ export class TransactionDatabase {
     return result.total;
   }
 
+  /**
+   * Get daily 7-day moving averages of time between transactions
+   * Returns an array starting from the first day with a transaction (if < 30 days),
+   * or the last 30 days (if >= 30 days), up to today
+   */
+  getDaily7DayMovingAverage(maxDays: number = 30): Array<{ date: Date; movingAverageHours: number | null }> {
+    // Get all transfers ordered by timestamp
+    const stmt = this.db.prepare(`
+      SELECT timestamp
+      FROM token_transfers
+      ORDER BY block_number ASC, timestamp ASC
+    `);
+    const rows = stmt.all() as Array<{ timestamp: string }>;
+
+    if (rows.length < 2) {
+      // Not enough data for moving average
+      return [];
+    }
+
+    // Convert to Date objects
+    const transfers = rows.map(row => new Date(row.timestamp));
+
+    // Find the first transaction date
+    const firstTransfer = transfers[0];
+    const firstDate = new Date(firstTransfer);
+    firstDate.setHours(0, 0, 0, 0); // Start of first day
+
+    // Today's date
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // End of today
+
+    // Calculate the number of days from first transaction to today
+    const daysDiff = Math.ceil((today.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Determine start date:
+    // - If less than maxDays, start from first transaction
+    // - If maxDays or more, start from (today - maxDays + 1) to show last maxDays days
+    let startDate: Date;
+    if (daysDiff < maxDays) {
+      // Less than maxDays of history, start from first transaction
+      startDate = new Date(firstDate);
+    } else {
+      // More than maxDays of history, show last maxDays days (going backward from today)
+      startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - (maxDays - 1));
+      startDate.setHours(0, 0, 0, 0);
+    }
+
+    const actualDays = Math.min(daysDiff + 1, maxDays);
+
+    if (actualDays <= 0) {
+      return [];
+    }
+
+    const dailyData: Array<{ date: Date; movingAverageHours: number | null }> = [];
+
+    // Generate data for each day from startDate to today
+    for (let i = 0; i < actualDays; i++) {
+      const targetDate = new Date(startDate);
+      targetDate.setDate(targetDate.getDate() + i);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // If we've gone past today, stop
+      if (endOfDay > today) {
+        break;
+      }
+
+      // Find all transfers up to end of this day
+      const transfersUpToDate = transfers.filter(t => t <= endOfDay);
+
+      if (transfersUpToDate.length < 2) {
+        dailyData.push({ date: targetDate, movingAverageHours: null });
+        continue;
+      }
+
+      // Calculate 7-day window
+      const windowStart = new Date(endOfDay);
+      windowStart.setDate(windowStart.getDate() - 7);
+      windowStart.setHours(0, 0, 0, 0);
+
+      // Find transfers within the 7-day window
+      const transfersInWindow = transfersUpToDate.filter(t => t >= windowStart);
+
+      if (transfersInWindow.length < 2) {
+        dailyData.push({ date: targetDate, movingAverageHours: null });
+        continue;
+      }
+
+      // Calculate time differences within the 7-day window
+      const diffsInWindow: number[] = [];
+      for (let j = 1; j < transfersInWindow.length; j++) {
+        diffsInWindow.push(transfersInWindow[j].getTime() - transfersInWindow[j - 1].getTime());
+      }
+
+      if (diffsInWindow.length === 0) {
+        dailyData.push({ date: targetDate, movingAverageHours: null });
+        continue;
+      }
+
+      // Calculate average (in milliseconds), then convert to hours
+      const avgMs = diffsInWindow.reduce((sum, diff) => sum + diff, 0) / diffsInWindow.length;
+      const avgHours = avgMs / (1000 * 60 * 60);
+
+      dailyData.push({ date: targetDate, movingAverageHours: avgHours });
+    }
+
+    return dailyData;
+  }
+
   close(): void {
     this.db.close();
   }
