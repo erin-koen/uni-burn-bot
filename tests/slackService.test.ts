@@ -45,6 +45,7 @@ describe('SlackService', () => {
           averageTimeBetween: null,
           totalBurners: 1,
           topBurners: [],
+          daily7DayMA: [],
         }
       );
 
@@ -102,6 +103,7 @@ describe('SlackService', () => {
         averageTimeBetween: null,
         totalBurners: 1,
         topBurners: [{ address: '0xburner', count: 1 }],
+        daily7DayMA: [],
       };
 
       await slackService.sendTransferAlert(transfer, null, 1, aggregateStats);
