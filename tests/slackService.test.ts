@@ -38,6 +38,7 @@ describe('SlackService', () => {
       const blocks = (service as any).formatTokenTransferMessage(
         transfer,
         null,
+        1,
         {
           totalTokens: BigInt('1000000000000000000'),
           totalTransactions: 1,
@@ -103,7 +104,7 @@ describe('SlackService', () => {
         topBurners: [{ address: '0xburner', count: 1 }],
       };
 
-      await slackService.sendTransferAlert(transfer, null, aggregateStats);
+      await slackService.sendTransferAlert(transfer, null, 1, aggregateStats);
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         expect.objectContaining({

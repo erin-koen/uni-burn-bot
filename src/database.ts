@@ -1,6 +1,11 @@
 import Database from 'better-sqlite3';
 import { TokenTransfer } from './types';
 
+// Current schema version - increment this when making schema changes
+const CURRENT_SCHEMA_VERSION = 2;
+
+type MigrationFunction = (db: Database.Database) => void;
+
 export class TransactionDatabase {
   private db: Database.Database;
 
@@ -9,7 +14,116 @@ export class TransactionDatabase {
     this.initializeSchema();
   }
 
+  private getSchemaVersion(): number {
+    try {
+      const result = this.db.prepare("PRAGMA user_version").get() as { user_version: number };
+      return result.user_version || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  private setSchemaVersion(version: number): void {
+    this.db.prepare(`PRAGMA user_version = ${version}`).run();
+  }
+
+  private getMigrations(): Map<number, MigrationFunction> {
+    const migrations = new Map<number, MigrationFunction>();
+
+    // Migration 1: Rename initiator_address to burner_address
+    migrations.set(1, (db: Database.Database) => {
+      console.log('Running migration 1: initiator_address -> burner_address');
+
+      // Get current table structure
+      const tableInfo = db.prepare("PRAGMA table_info(token_transfers)").all() as Array<{ name: string; type: string; notnull: number; dflt_value: any; pk: number }>;
+      const hasOldColumn = tableInfo.some(col => col.name === 'initiator_address');
+
+      if (!hasOldColumn) {
+        console.log('Migration 1: initiator_address column not found, skipping');
+        return;
+      }
+
+      // Create new table with updated schema
+      db.exec(`
+        CREATE TABLE token_transfers_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          tx_hash TEXT UNIQUE NOT NULL,
+          block_number INTEGER NOT NULL,
+          token_address TEXT NOT NULL,
+          from_address TEXT NOT NULL,
+          to_address TEXT NOT NULL,
+          burner_address TEXT,
+          value TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          gas_used INTEGER,
+          gas_price TEXT,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // Copy data, mapping old column to new
+      db.exec(`
+        INSERT INTO token_transfers_new
+        SELECT id, tx_hash, block_number, token_address, from_address, to_address,
+               initiator_address as burner_address, value, timestamp, gas_used, gas_price, created_at
+        FROM token_transfers;
+      `);
+
+      // Drop old table and rename new one
+      db.exec(`
+        DROP TABLE token_transfers;
+        ALTER TABLE token_transfers_new RENAME TO token_transfers;
+      `);
+
+      // Recreate indexes
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_tx_hash ON token_transfers(tx_hash);
+        CREATE INDEX IF NOT EXISTS idx_block_number ON token_transfers(block_number);
+        CREATE INDEX IF NOT EXISTS idx_token_address ON token_transfers(token_address);
+        CREATE INDEX IF NOT EXISTS idx_to_address ON token_transfers(to_address);
+        CREATE INDEX IF NOT EXISTS idx_burner_address ON token_transfers(burner_address);
+      `);
+
+      console.log('Migration 1 completed');
+    });
+
+    // Future migrations can be added here:
+    // migrations.set(2, (db) => { ... });
+    // migrations.set(3, (db) => { ... });
+
+    return migrations;
+  }
+
+  private runMigrations(): void {
+    const currentVersion = this.getSchemaVersion();
+
+    if (currentVersion >= CURRENT_SCHEMA_VERSION) {
+      return; // Already up to date
+    }
+
+    const migrations = this.getMigrations();
+
+    // Run migrations in order
+    for (let version = currentVersion + 1; version <= CURRENT_SCHEMA_VERSION; version++) {
+      const migration = migrations.get(version);
+      if (migration) {
+        console.log(`Applying migration ${version}...`);
+        migration(this.db);
+        this.setSchemaVersion(version);
+      } else {
+        // No migration needed for this version, just update version number
+        this.setSchemaVersion(version);
+      }
+    }
+
+    console.log(`Database schema is now at version ${CURRENT_SCHEMA_VERSION}`);
+  }
+
   private initializeSchema(): void {
+    // Run any pending migrations first
+    this.runMigrations();
+
+    // Create table if it doesn't exist (for fresh installs)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS token_transfers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,6 +146,11 @@ export class TransactionDatabase {
       CREATE INDEX IF NOT EXISTS idx_to_address ON token_transfers(to_address);
       CREATE INDEX IF NOT EXISTS idx_burner_address ON token_transfers(burner_address);
     `);
+
+    // Set schema version if this is a fresh install
+    if (this.getSchemaVersion() === 0) {
+      this.setSchemaVersion(CURRENT_SCHEMA_VERSION);
+    }
   }
 
   transferExists(txHash: string): boolean {

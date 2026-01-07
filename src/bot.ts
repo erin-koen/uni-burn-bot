@@ -94,6 +94,11 @@ async function main(): Promise<void> {
           ? mostRecentTransfer.timestamp.getTime() - sortedTransfers[1].timestamp.getTime()
           : null;
 
+        // Get burner stats for this specific burner
+        const burnerAddress = mostRecentTransfer.burnerAddress || mostRecentTransfer.from;
+        const burnerStats = db.getBurnerStats(burnerAddress);
+        const burnerCount = burnerStats.count;
+
         // Get aggregate statistics
         const totalTokens = db.getTotalTokensSent();
         const totalTransactions = db.getTransferCount(config.tokenAddress, config.recipientAddress);
@@ -110,7 +115,7 @@ async function main(): Promise<void> {
         };
 
         // Send message with new format
-        await slack.sendTransferAlert(mostRecentTransfer, timeSinceLast, aggregateStats);
+        await slack.sendTransferAlert(mostRecentTransfer, timeSinceLast, burnerCount, aggregateStats);
         console.log('Sent historical summary to Slack');
       } else {
         // No transfers found
@@ -170,6 +175,11 @@ async function main(): Promise<void> {
               ? transfer.timestamp.getTime() - previousTransferTimestamp.getTime()
               : null;
 
+            // Get burner stats for this specific burner
+            const burnerAddress = transfer.burnerAddress || transfer.from;
+            const burnerStats = db.getBurnerStats(burnerAddress);
+            const burnerCount = burnerStats.count;
+
             // Get aggregate statistics
             const totalTokens = db.getTotalTokensSent();
             const totalTransactions = db.getTransferCount(config.tokenAddress, config.recipientAddress);
@@ -187,7 +197,7 @@ async function main(): Promise<void> {
 
             // Send Slack alert
             try {
-              await slack.sendTransferAlert(transfer, timeSinceLast, aggregateStats);
+              await slack.sendTransferAlert(transfer, timeSinceLast, burnerCount, aggregateStats);
               console.log(`Sent alert for transfer: ${transfer.hash}`);
             } catch (error: any) {
               console.error(`Failed to send Slack alert:`, error.message);

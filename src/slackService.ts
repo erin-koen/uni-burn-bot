@@ -49,6 +49,7 @@ export class SlackService {
   private formatTokenTransferMessage(
     transfer: TokenTransfer,
     timeSinceLast: number | null,
+    burnerCount: number,
     aggregateStats: {
       totalTokens: bigint;
       totalTransactions: number;
@@ -85,7 +86,7 @@ export class SlackService {
         fields: [
           {
             type: 'mrkdwn',
-            text: `*Burner:*\n<${burnerUrl}|\`${burnerAddress}\`>`,
+            text: `*Burner:*\n<${burnerUrl}|\`${burnerAddress}\`>\n${burnerCount} transaction${burnerCount !== 1 ? 's' : ''}`,
           },
           {
             type: 'mrkdwn',
@@ -198,6 +199,7 @@ export class SlackService {
   async sendTransferAlert(
     transfer: TokenTransfer,
     timeSinceLast: number | null,
+    burnerCount: number,
     aggregateStats: {
       totalTokens: bigint;
       totalTransactions: number;
@@ -206,7 +208,7 @@ export class SlackService {
       topBurners: Array<{ address: string; count: number }>;
     }
   ): Promise<void> {
-    const blocks = this.formatTokenTransferMessage(transfer, timeSinceLast, aggregateStats);
+    const blocks = this.formatTokenTransferMessage(transfer, timeSinceLast, burnerCount, aggregateStats);
     await this.sendMessage(blocks);
   }
 
