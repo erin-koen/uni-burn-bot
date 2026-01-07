@@ -18,7 +18,7 @@ export class TransactionDatabase {
         token_address TEXT NOT NULL,
         from_address TEXT NOT NULL,
         to_address TEXT NOT NULL,
-        initiator_address TEXT,
+        burner_address TEXT,
         value TEXT NOT NULL,
         timestamp TEXT NOT NULL,
         gas_used INTEGER,
@@ -30,7 +30,7 @@ export class TransactionDatabase {
       CREATE INDEX IF NOT EXISTS idx_block_number ON token_transfers(block_number);
       CREATE INDEX IF NOT EXISTS idx_token_address ON token_transfers(token_address);
       CREATE INDEX IF NOT EXISTS idx_to_address ON token_transfers(to_address);
-      CREATE INDEX IF NOT EXISTS idx_initiator_address ON token_transfers(initiator_address);
+      CREATE INDEX IF NOT EXISTS idx_burner_address ON token_transfers(burner_address);
     `);
   }
 
@@ -43,7 +43,7 @@ export class TransactionDatabase {
   addTransfer(transfer: TokenTransfer): void {
     const stmt = this.db.prepare(`
       INSERT INTO token_transfers (
-        tx_hash, block_number, token_address, from_address, to_address, initiator_address,
+        tx_hash, block_number, token_address, from_address, to_address, burner_address,
         value, timestamp, gas_used, gas_price
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
@@ -54,7 +54,7 @@ export class TransactionDatabase {
       transfer.tokenAddress,
       transfer.from,
       transfer.to,
-      transfer.initiatorAddress || null,
+      transfer.burnerAddress || null,
       transfer.value.toString(),
       transfer.timestamp.toISOString(),
       transfer.gasUsed || null,
@@ -98,47 +98,47 @@ export class TransactionDatabase {
       gasUsed: row.gas_used,
       gasPrice: row.gas_price ? BigInt(row.gas_price) : undefined,
       status: row.status,
-      initiatorAddress: row.initiator_address,
+      burnerAddress: row.burner_address,
     }));
   }
 
-  getInitiatorStats(initiatorAddress: string): { count: number; rank: number; totalInitiators: number } {
-    // Get count for this initiator
+  getBurnerStats(burnerAddress: string): { count: number; rank: number; totalBurners: number } {
+    // Get count for this burner
     const countStmt = this.db.prepare(`
       SELECT COUNT(*) as count
       FROM token_transfers
-      WHERE initiator_address = ?
+      WHERE burner_address = ?
     `);
-    const countResult = countStmt.get(initiatorAddress) as { count: number };
+    const countResult = countStmt.get(burnerAddress) as { count: number };
     const count = countResult.count;
 
-    // Get total number of unique initiators
+    // Get total number of unique burners
     const totalStmt = this.db.prepare(`
-      SELECT COUNT(DISTINCT initiator_address) as total
+      SELECT COUNT(DISTINCT burner_address) as total
       FROM token_transfers
-      WHERE initiator_address IS NOT NULL
+      WHERE burner_address IS NOT NULL
     `);
     const totalResult = totalStmt.get() as { total: number };
-    const totalInitiators = totalResult.total;
+    const totalBurners = totalResult.total;
 
-    // Get rank by counting how many distinct initiators have more transactions
+    // Get rank by counting how many distinct burners have more transactions
     const rankStmt = this.db.prepare(`
-      WITH initiator_counts AS (
+      WITH burner_counts AS (
         SELECT
-          initiator_address,
+          burner_address,
           COUNT(*) as tx_count
         FROM token_transfers
-        WHERE initiator_address IS NOT NULL
-        GROUP BY initiator_address
+        WHERE burner_address IS NOT NULL
+        GROUP BY burner_address
       )
       SELECT COUNT(*) + 1 as rank
-      FROM initiator_counts
-      WHERE tx_count > (SELECT tx_count FROM initiator_counts WHERE initiator_address = ?)
+      FROM burner_counts
+      WHERE tx_count > (SELECT tx_count FROM burner_counts WHERE burner_address = ?)
     `);
-    const rankResult = rankStmt.get(initiatorAddress) as { rank: number };
+    const rankResult = rankStmt.get(burnerAddress) as { rank: number };
     const rank = rankResult.rank;
 
-    return { count, rank, totalInitiators };
+    return { count, rank, totalBurners };
   }
 
   getTransferCount(tokenAddress?: string, recipientAddress?: string): number {
@@ -220,14 +220,14 @@ export class TransactionDatabase {
     return total;
   }
 
-  getTopInitiators(limit: number = 3): Array<{ address: string; count: number }> {
+  getTopBurners(limit: number = 3): Array<{ address: string; count: number }> {
     const stmt = this.db.prepare(`
       SELECT
-        initiator_address as address,
+        burner_address as address,
         COUNT(*) as count
       FROM token_transfers
-      WHERE initiator_address IS NOT NULL
-      GROUP BY initiator_address
+      WHERE burner_address IS NOT NULL
+      GROUP BY burner_address
       ORDER BY count DESC
       LIMIT ?
     `);
@@ -235,11 +235,11 @@ export class TransactionDatabase {
     return rows;
   }
 
-  getTotalInitiators(): number {
+  getTotalBurners(): number {
     const stmt = this.db.prepare(`
-      SELECT COUNT(DISTINCT initiator_address) as total
+      SELECT COUNT(DISTINCT burner_address) as total
       FROM token_transfers
-      WHERE initiator_address IS NOT NULL
+      WHERE burner_address IS NOT NULL
     `);
     const result = stmt.get() as { total: number };
     return result.total;

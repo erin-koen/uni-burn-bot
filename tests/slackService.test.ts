@@ -42,8 +42,8 @@ describe('SlackService', () => {
           totalTokens: BigInt('1000000000000000000'),
           totalTransactions: 1,
           averageTimeBetween: null,
-          totalInitiators: 1,
-          topInitiators: [],
+          totalBurners: 1,
+          topBurners: [],
         }
       );
 
@@ -91,7 +91,7 @@ describe('SlackService', () => {
         to: '0xto',
         value: BigInt('4000000000000000000000'),
         timestamp: new Date('2025-01-01T00:00:00Z'),
-        initiatorAddress: '0xinitiator',
+        burnerAddress: '0xburner',
         status: 1,
       };
 
@@ -99,8 +99,8 @@ describe('SlackService', () => {
         totalTokens: BigInt('4000000000000000000000'),
         totalTransactions: 1,
         averageTimeBetween: null,
-        totalInitiators: 1,
-        topInitiators: [{ address: '0xinitiator', count: 1 }],
+        totalBurners: 1,
+        topBurners: [{ address: '0xburner', count: 1 }],
       };
 
       await slackService.sendTransferAlert(transfer, null, aggregateStats);

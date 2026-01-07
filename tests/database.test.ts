@@ -35,7 +35,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('1000000000000000000'),
         timestamp: new Date(),
-        initiatorAddress: '0xinitiator',
+        burnerAddress: '0xburner',
       };
       db.addTransfer(transfer);
       expect(db.transferExists('0x123')).toBe(true);
@@ -52,7 +52,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('2000000000000000000'),
         timestamp: new Date('2025-01-01T00:00:00Z'),
-        initiatorAddress: '0xinitiator',
+        burnerAddress: '0xburner',
       };
 
       db.addTransfer(transfer);
@@ -74,7 +74,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('1000000000000000000'),
         timestamp: new Date('2025-01-01T00:00:00Z'),
-        initiatorAddress: '0xinit1',
+        burnerAddress: '0xburn1',
       };
 
       const transfer2: TokenTransfer = {
@@ -85,7 +85,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('2000000000000000000'),
         timestamp: new Date('2025-01-02T00:00:00Z'),
-        initiatorAddress: '0xinit2',
+        burnerAddress: '0xburn2',
       };
 
       db.addTransfer(transfer1);
@@ -108,7 +108,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('1000000000000000000'),
         timestamp: new Date('2025-01-01T00:00:00Z'),
-        initiatorAddress: '0xinit1',
+        burnerAddress: '0xburn1',
       };
 
       const transfer2: TokenTransfer = {
@@ -119,7 +119,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('2000000000000000000'),
         timestamp: new Date('2025-01-02T00:00:00Z'),
-        initiatorAddress: '0xinit2',
+        burnerAddress: '0xburn2',
       };
 
       db.addTransfer(transfer1);
@@ -128,18 +128,18 @@ describe('TransactionDatabase', () => {
     });
   });
 
-  describe('getTopInitiators', () => {
+  describe('getTopBurners', () => {
     it('should return empty array for empty database', () => {
-      expect(db.getTopInitiators(3)).toEqual([]);
+      expect(db.getTopBurners(3)).toEqual([]);
     });
 
-    it('should return top initiators by transaction count', () => {
-      // Add transfers from different initiators
-      const initiator1 = '0xinit1';
-      const initiator2 = '0xinit2';
-      const initiator3 = '0xinit3';
+    it('should return top burners by transaction count', () => {
+      // Add transfers from different burners
+      const burner1 = '0xburn1';
+      const burner2 = '0xburn2';
+      const burner3 = '0xburn3';
 
-      // Initiator1: 3 transactions
+      // Burner1: 3 transactions
       for (let i = 0; i < 3; i++) {
         db.addTransfer({
           hash: `0x1${i}`,
@@ -149,11 +149,11 @@ describe('TransactionDatabase', () => {
           to: '0xto',
           value: BigInt('1000000000000000000'),
           timestamp: new Date(`2025-01-0${i + 1}T00:00:00Z`),
-          initiatorAddress: initiator1,
+          burnerAddress: burner1,
         });
       }
 
-      // Initiator2: 2 transactions
+      // Burner2: 2 transactions
       for (let i = 0; i < 2; i++) {
         db.addTransfer({
           hash: `0x2${i}`,
@@ -163,11 +163,11 @@ describe('TransactionDatabase', () => {
           to: '0xto',
           value: BigInt('1000000000000000000'),
           timestamp: new Date(`2025-01-0${i + 4}T00:00:00Z`),
-          initiatorAddress: initiator2,
+          burnerAddress: burner2,
         });
       }
 
-      // Initiator3: 1 transaction
+      // Burner3: 1 transaction
       db.addTransfer({
         hash: '0x30',
         blockNumber: 3000,
@@ -176,26 +176,26 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('1000000000000000000'),
         timestamp: new Date('2025-01-06T00:00:00Z'),
-        initiatorAddress: initiator3,
+        burnerAddress: burner3,
       });
 
-      const topInitiators = db.getTopInitiators(3);
-      expect(topInitiators).toHaveLength(3);
-      expect(topInitiators[0].address).toBe(initiator1);
-      expect(topInitiators[0].count).toBe(3);
-      expect(topInitiators[1].address).toBe(initiator2);
-      expect(topInitiators[1].count).toBe(2);
-      expect(topInitiators[2].address).toBe(initiator3);
-      expect(topInitiators[2].count).toBe(1);
+      const topBurners = db.getTopBurners(3);
+      expect(topBurners).toHaveLength(3);
+      expect(topBurners[0].address).toBe(burner1);
+      expect(topBurners[0].count).toBe(3);
+      expect(topBurners[1].address).toBe(burner2);
+      expect(topBurners[1].count).toBe(2);
+      expect(topBurners[2].address).toBe(burner3);
+      expect(topBurners[2].count).toBe(1);
     });
   });
 
-  describe('getInitiatorStats', () => {
+  describe('getBurnerStats', () => {
     it('should return correct count and rank', () => {
-      const initiator1 = '0xinit1';
-      const initiator2 = '0xinit2';
+      const burner1 = '0xburn1';
+      const burner2 = '0xburn2';
 
-      // Add 3 transactions from initiator1
+      // Add 3 transactions from burner1
       for (let i = 0; i < 3; i++) {
         db.addTransfer({
           hash: `0x1${i}`,
@@ -205,11 +205,11 @@ describe('TransactionDatabase', () => {
           to: '0xto',
           value: BigInt('1000000000000000000'),
           timestamp: new Date(`2025-01-0${i + 1}T00:00:00Z`),
-          initiatorAddress: initiator1,
+          burnerAddress: burner1,
         });
       }
 
-      // Add 1 transaction from initiator2
+      // Add 1 transaction from burner2
       db.addTransfer({
         hash: '0x20',
         blockNumber: 2000,
@@ -218,18 +218,18 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('1000000000000000000'),
         timestamp: new Date('2025-01-04T00:00:00Z'),
-        initiatorAddress: initiator2,
+        burnerAddress: burner2,
       });
 
-      const stats1 = db.getInitiatorStats(initiator1);
+      const stats1 = db.getBurnerStats(burner1);
       expect(stats1.count).toBe(3);
       expect(stats1.rank).toBe(1);
-      expect(stats1.totalInitiators).toBe(2);
+      expect(stats1.totalBurners).toBe(2);
 
-      const stats2 = db.getInitiatorStats(initiator2);
+      const stats2 = db.getBurnerStats(burner2);
       expect(stats2.count).toBe(1);
       expect(stats2.rank).toBe(2);
-      expect(stats2.totalInitiators).toBe(2);
+      expect(stats2.totalBurners).toBe(2);
     });
   });
 
@@ -245,7 +245,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('1000000000000000000'),
         timestamp: new Date('2025-01-01T00:00:00Z'),
-        initiatorAddress: '0xinit',
+        burnerAddress: '0xburn',
       });
 
       expect(db.getAverageTimeBetweenTransfers()).toBeNull();
@@ -264,7 +264,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('1000000000000000000'),
         timestamp: date1,
-        initiatorAddress: '0xinit',
+        burnerAddress: '0xburn',
       });
 
       db.addTransfer({
@@ -275,7 +275,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('1000000000000000000'),
         timestamp: date2,
-        initiatorAddress: '0xinit',
+        burnerAddress: '0xburn',
       });
 
       db.addTransfer({
@@ -286,7 +286,7 @@ describe('TransactionDatabase', () => {
         to: '0xto',
         value: BigInt('1000000000000000000'),
         timestamp: date3,
-        initiatorAddress: '0xinit',
+        burnerAddress: '0xburn',
       });
 
       const average = db.getAverageTimeBetweenTransfers();

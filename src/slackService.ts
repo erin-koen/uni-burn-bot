@@ -53,13 +53,13 @@ export class SlackService {
       totalTokens: bigint;
       totalTransactions: number;
       averageTimeBetween: number | null;
-      totalInitiators: number;
-      topInitiators: Array<{ address: string; count: number }>;
+      totalBurners: number;
+      topBurners: Array<{ address: string; count: number }>;
     }
   ): any[] {
     const txUrl = `https://etherscan.io/tx/${transfer.hash}`;
-    const initiatorAddress = transfer.initiatorAddress || transfer.from;
-    const initiatorUrl = `https://etherscan.io/address/${initiatorAddress}`;
+    const burnerAddress = transfer.burnerAddress || transfer.from;
+    const burnerUrl = `https://etherscan.io/address/${burnerAddress}`;
 
     // Build message blocks
     const blocks: any[] = [
@@ -85,7 +85,7 @@ export class SlackService {
         fields: [
           {
             type: 'mrkdwn',
-            text: `*Initiator:*\n<${initiatorUrl}|\`${initiatorAddress}\`>`,
+            text: `*Burner:*\n<${burnerUrl}|\`${burnerAddress}\`>`,
           },
           {
             type: 'mrkdwn',
@@ -141,18 +141,18 @@ export class SlackService {
         },
         {
           type: 'mrkdwn',
-          text: `*Total Initiators:*\n${aggregateStats.totalInitiators.toLocaleString()}`,
+          text: `*Total Burners:*\n${aggregateStats.totalBurners.toLocaleString()}`,
         },
       ],
     });
 
-    // Add top 3 initiators
-    if (aggregateStats.topInitiators.length > 0) {
-      const topInitiatorsText = aggregateStats.topInitiators
-        .map((initiator, index) => {
+    // Add top 3 burners
+    if (aggregateStats.topBurners.length > 0) {
+      const topBurnersText = aggregateStats.topBurners
+        .map((burner, index) => {
           const rankEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉';
-          const initiatorUrl = `https://etherscan.io/address/${initiator.address}`;
-          return `${rankEmoji} <${initiatorUrl}|\`${initiator.address.slice(0, 10)}...\`> - ${initiator.count} transaction${initiator.count !== 1 ? 's' : ''}`;
+          const burnerUrl = `https://etherscan.io/address/${burner.address}`;
+          return `${rankEmoji} <${burnerUrl}|\`${burner.address.slice(0, 10)}...\`> - ${burner.count} transaction${burner.count !== 1 ? 's' : ''}`;
         })
         .join('\n');
 
@@ -160,7 +160,7 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Top 3 Initiators:*\n${topInitiatorsText}`,
+          text: `*Top 3 Burners:*\n${topBurnersText}`,
         },
       });
     }
@@ -202,8 +202,8 @@ export class SlackService {
       totalTokens: bigint;
       totalTransactions: number;
       averageTimeBetween: number | null;
-      totalInitiators: number;
-      topInitiators: Array<{ address: string; count: number }>;
+      totalBurners: number;
+      topBurners: Array<{ address: string; count: number }>;
     }
   ): Promise<void> {
     const blocks = this.formatTokenTransferMessage(transfer, timeSinceLast, aggregateStats);

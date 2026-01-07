@@ -98,15 +98,15 @@ async function main(): Promise<void> {
         const totalTokens = db.getTotalTokensSent();
         const totalTransactions = db.getTransferCount(config.tokenAddress, config.recipientAddress);
         const averageTimeBetween = db.getAverageTimeBetweenTransfers();
-        const totalInitiators = db.getTotalInitiators();
-        const topInitiators = db.getTopInitiators(3);
+        const totalBurners = db.getTotalBurners();
+        const topBurners = db.getTopBurners(3);
 
         const aggregateStats = {
           totalTokens,
           totalTransactions,
           averageTimeBetween,
-          totalInitiators,
-          topInitiators,
+          totalBurners,
+          topBurners,
         };
 
         // Send message with new format
@@ -174,15 +174,15 @@ async function main(): Promise<void> {
             const totalTokens = db.getTotalTokensSent();
             const totalTransactions = db.getTransferCount(config.tokenAddress, config.recipientAddress);
             const averageTimeBetween = db.getAverageTimeBetweenTransfers();
-            const totalInitiators = db.getTotalInitiators();
-            const topInitiators = db.getTopInitiators(3);
+            const totalBurners = db.getTotalBurners();
+            const topBurners = db.getTopBurners(3);
 
             const aggregateStats = {
               totalTokens,
               totalTransactions,
               averageTimeBetween,
-              totalInitiators,
-              topInitiators,
+              totalBurners,
+              topBurners,
             };
 
             // Send Slack alert

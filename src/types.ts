@@ -9,7 +9,7 @@ export interface TokenTransfer {
   gasUsed?: number;
   gasPrice?: bigint;
   status?: number;
-  initiatorAddress?: string; // The address that initiated the transaction (tx.from)
+  burnerAddress?: string; // The address that initiated the transaction (tx.from)
 }
 
 export interface Config {
