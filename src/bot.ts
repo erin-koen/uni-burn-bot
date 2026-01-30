@@ -24,11 +24,22 @@ function loadConfig(): Config {
     process.exit(1);
   }
 
+  // Build amounts array: start with the primary amount, then add any additional amounts
+  const amounts: string[] = [amount];
+
+  // Support ADDITIONAL_AMOUNTS (comma-separated) for multiple amounts
+  const additionalAmounts = process.env.ADDITIONAL_AMOUNTS?.trim();
+  if (additionalAmounts) {
+    const additional = additionalAmounts.split(',').map(a => a.trim()).filter(a => a.length > 0);
+    amounts.push(...additional);
+  }
+
   return {
     ethereumRpcUrl,
     tokenAddress,
     recipientAddress,
-    amount,
+    amount, // Keep for backward compatibility
+    amounts, // Array of all amounts to monitor
     tokenDecimals,
     slackBotToken,
     slackChannel,
@@ -50,10 +61,10 @@ async function main(): Promise<void> {
       config.ethereumRpcUrl,
       config.tokenAddress,
       config.recipientAddress,
-      config.amount
+      config.amounts
     );
     await monitor.initialize();
-    slack = new SlackService(config.slackBotToken, config.slackChannel, config.tokenDecimals);
+    slack = new SlackService(config.slackBotToken, config.slackChannel, config.tokenDecimals, config.amounts);
   } catch (error: any) {
     console.error(`Failed to initialize services:`, error.message);
     process.exit(1);

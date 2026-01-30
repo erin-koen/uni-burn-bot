@@ -5,12 +5,36 @@ export class SlackService {
   private client: WebClient;
   private channel: string;
   private tokenDecimals: number;
+  private monitoredAmounts: bigint[];
 
-  constructor(botToken: string, channel: string, tokenDecimals: number = 18) {
+  constructor(botToken: string, channel: string, tokenDecimals: number = 18, monitoredAmounts: string[] = []) {
     this.client = new WebClient(botToken);
     this.channel = channel;
     this.tokenDecimals = tokenDecimals;
+    this.monitoredAmounts = monitoredAmounts.map(amount => BigInt(amount));
     console.log(`Slack service initialized for channel: ${this.channel}`);
+  }
+
+  private getTransferSizeLabel(value: bigint): string {
+    // Check if it's a 2k transfer (2000 tokens)
+    const twoK = BigInt(2000) * BigInt(10 ** this.tokenDecimals);
+    // Check if it's a 4k transfer (4000 tokens)
+    const fourK = BigInt(4000) * BigInt(10 ** this.tokenDecimals);
+
+    if (value === twoK) {
+      return 'Unichain';
+    } else if (value === fourK) {
+      return 'Mainnet';
+    } else {
+      // For other amounts, format the number
+      const formatted = this.formatTokenAmount(value);
+      // Try to format nicely (e.g., "1" for 1 token, "100" for 100 tokens)
+      const num = parseFloat(formatted);
+      if (num >= 1000) {
+        return `${(num / 1000).toFixed(1)}k`.replace('.0k', 'k');
+      }
+      return formatted;
+    }
   }
 
   private formatTokenAmount(value: bigint): string {
@@ -184,13 +208,17 @@ export class SlackService {
     const burnerAddress = transfer.burnerAddress || transfer.from;
     const burnerUrl = `https://etherscan.io/address/${burnerAddress}`;
 
+    // Determine transfer size label (2k, 4k, etc.)
+    const transferSizeLabel = this.getTransferSizeLabel(transfer.value);
+    const transferAmountFormatted = this.formatTokenAmount(transfer.value);
+
     // Build message blocks
     const blocks: any[] = [
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: ' :unicorn_face: :fire: UNI  Burn Detected',
+          text: ` :unicorn_face: :fire: ${transferSizeLabel} UNI Burn Detected`,
         },
       },
       {
@@ -206,6 +234,10 @@ export class SlackService {
       {
         type: 'section',
         fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Amount:*\n${transferAmountFormatted} UNI (${transferSizeLabel} transfer)`,
+          },
           {
             type: 'mrkdwn',
             text: `*Burner:*\n<${burnerUrl}|\`${burnerAddress}\`>\n${burnerCount} transaction${burnerCount !== 1 ? 's' : ''}`,

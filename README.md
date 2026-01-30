@@ -34,6 +34,10 @@ RECIPIENT_ADDRESS=0x...
 # Amount to monitor (in token's smallest unit, e.g., for 18 decimals: 1000000000000000000 = 1 token)
 AMOUNT=1000000000000000000
 
+# Optional: Additional amounts to monitor (comma-separated, same format as AMOUNT)
+# Example: To also monitor 2000 UNI (with 18 decimals): 2000000000000000000000
+# ADDITIONAL_AMOUNTS=2000000000000000000000
+
 # Optional: Token decimals for human-readable formatting (default: 18)
 # TOKEN_DECIMALS=18
 
@@ -66,6 +70,7 @@ npm run dev
 - `TOKEN_ADDRESS`: The ERC-20 token contract address to monitor
 - `RECIPIENT_ADDRESS`: The address that receives the tokens (the `to` address in the Transfer event)
 - `AMOUNT`: The exact amount to monitor (in the token's smallest unit, e.g., wei for 18 decimals)
+- `ADDITIONAL_AMOUNTS`: (Optional) Comma-separated list of additional amounts to monitor (same format as AMOUNT)
 - `TOKEN_DECIMALS`: (Optional) Token decimals for human-readable formatting (default: 18)
 - `SLACK_BOT_TOKEN`: Your Slack bot token (starts with `xoxb-`)
 - `SLACK_CHANNEL`: The Slack channel to send alerts to (e.g., `#alerts`). **Note:** If the channel name starts with `#`, you must quote the value: `"#channel-name"`
@@ -77,6 +82,13 @@ For tokens with 18 decimals (most common):
 - 1 token = `1000000000000000000` (1e18)
 - 0.5 tokens = `500000000000000000` (5e17)
 - 100 tokens = `100000000000000000000` (1e20)
+- 2000 tokens = `2000000000000000000000` (2e21)
+
+**Example:** To monitor both 1 UNI and 2000 UNI transfers:
+```
+AMOUNT=1000000000000000000
+ADDITIONAL_AMOUNTS=2000000000000000000000
+```
 
 For tokens with different decimals, adjust accordingly. For example, USDC has 6 decimals:
 - 1 USDC = `1000000` (1e6)

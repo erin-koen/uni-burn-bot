@@ -16,7 +16,8 @@ export interface Config {
   ethereumRpcUrl: string;
   tokenAddress: string;
   recipientAddress: string;
-  amount: string; // Amount in token's smallest unit (e.g., wei for 18 decimals)
+  amount: string; // Amount in token's smallest unit (e.g., wei for 18 decimals) - kept for backward compatibility
+  amounts: string[]; // Array of amounts to monitor (includes the original amount plus any additional amounts)
   tokenDecimals?: number; // Token decimals (default: 18)
   slackBotToken: string;
   slackChannel: string;

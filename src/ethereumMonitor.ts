@@ -8,14 +8,14 @@ export class EthereumMonitor {
   private web3: Web3;
   private tokenAddress: string;
   private recipientAddress: string;
-  private targetAmount: bigint;
+  private targetAmounts: bigint[];
   private lastCheckedBlock: number | null = null;
 
-  constructor(rpcUrl: string, tokenAddress: string, recipientAddress: string, amount: string) {
+  constructor(rpcUrl: string, tokenAddress: string, recipientAddress: string, amounts: string[]) {
     this.web3 = new Web3(rpcUrl);
     this.tokenAddress = this.web3.utils.toChecksumAddress(tokenAddress);
     this.recipientAddress = this.web3.utils.toChecksumAddress(recipientAddress);
-    this.targetAmount = BigInt(amount);
+    this.targetAmounts = amounts.map(amount => BigInt(amount));
   }
 
   async initialize(): Promise<void> {
@@ -23,7 +23,8 @@ export class EthereumMonitor {
     try {
       await this.web3.eth.getBlockNumber();
       console.log(`Connected to Ethereum. Monitoring token: ${this.tokenAddress}`);
-      console.log(`Looking for transfers of ${this.targetAmount.toString()} to ${this.recipientAddress}`);
+      const amountsStr = this.targetAmounts.map(a => a.toString()).join(', ');
+      console.log(`Looking for transfers of [${amountsStr}] to ${this.recipientAddress}`);
     } catch (error: any) {
       throw new Error(`Failed to connect to Ethereum RPC endpoint: ${error.message}`);
     }
@@ -80,8 +81,8 @@ export class EthereumMonitor {
         const transfer = this.parseTransferEvent(log);
         if (!transfer) continue;
 
-        // Check if the amount matches
-        if (transfer.value !== this.targetAmount) {
+        // Check if the amount matches any of the target amounts
+        if (!this.targetAmounts.includes(transfer.value)) {
           continue;
         }
 
