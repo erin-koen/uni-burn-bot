@@ -275,8 +275,14 @@ export class SlackService {
     });
 
     const totalTokensFormatted = this.formatTokenAmount(aggregateStats.totalTokens);
-    const avgTimeFormatted = aggregateStats.averageTimeBetween
-      ? this.formatTimeDifference(aggregateStats.averageTimeBetween)
+
+    // Get the most recent 7-day moving average (last non-null value in the array)
+    const recent7DayMA = aggregateStats.daily7DayMA
+      .filter(d => d.movingAverageHours !== null)
+      .slice(-1)[0];
+
+    const avgTimeFormatted = recent7DayMA?.movingAverageHours !== null && recent7DayMA?.movingAverageHours !== undefined
+      ? this.formatTimeDifference(recent7DayMA.movingAverageHours * 1000 * 60 * 60) // Convert hours to milliseconds
       : 'N/A';
 
     blocks.push({
@@ -292,7 +298,7 @@ export class SlackService {
         },
         {
           type: 'mrkdwn',
-          text: `*Average Time Between:*\n${avgTimeFormatted}`,
+          text: `*Average Time Between Burns (7-day moving average):*\n${avgTimeFormatted}`,
         },
         {
           type: 'mrkdwn',
